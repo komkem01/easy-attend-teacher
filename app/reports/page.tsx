@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { authService } from '@/services/authService';
 import { attendanceService, classroomService, studentService, statsService, teacherInfoService } from '@/services/apiService';
 import { Attendance, Classroom, Student, AttendanceStats } from '@/types/entities';
+import LoadingSpinner from '@/components/LoadingSpinner';
+import { useToast } from '@/components/Toast';
 
 interface ClassroomReport {
   classroom: Classroom;
@@ -15,6 +17,7 @@ interface ClassroomReport {
 
 export default function ReportsPage() {
   const router = useRouter();
+  const { showToast, ToastContainer } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -74,6 +77,7 @@ export default function ReportsPage() {
       
     } catch (error) {
       console.error('Error loading data:', error);
+      showToast('เกิดข้อผิดพลาดในการโหลดข้อมูล', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -93,9 +97,9 @@ export default function ReportsPage() {
         att.attendance_date >= dateRange.startDate && att.attendance_date <= dateRange.endDate
       );
       
-      // Get classroom students count (you might need to implement this)
+      // Get classroom students count - use grade/section matching
       const classroomStudents = (students || []).filter(student => 
-        filteredAttendances.some(att => att.student_id === student.id)
+        student.grade_level === classroom.grade_level && student.class_section === classroom.class_section
       );
       
       const stats = statsService.calculateAttendanceStats(filteredAttendances);
@@ -172,18 +176,12 @@ export default function ReportsPage() {
   };
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">กำลังโหลด...</p>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner fullScreen={true} message="กำลังโหลดรายงาน..." />;
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-100">
+      <ToastContainer />
       {/* Header */}
       <div className="bg-white/80 backdrop-blur-sm shadow-lg border-b border-blue-100 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -200,6 +198,12 @@ export default function ReportsPage() {
               <h1 className="text-xl sm:text-2xl font-bold text-gray-800">รายงานการเข้าเรียน</h1>
             </div>
             <div className="flex items-center space-x-2">
+              <button
+                onClick={() => router.push('/attendance')}
+                className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-medium py-2 px-4 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-md text-sm"
+              >
+                บันทึกการเข้าเรียน
+              </button>
               <button
                 onClick={() => setViewMode('overview')}
                 className={`py-2 px-4 rounded-xl text-sm font-medium transition-all duration-200 ${

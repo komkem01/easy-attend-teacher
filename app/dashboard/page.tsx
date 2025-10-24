@@ -11,6 +11,7 @@ import {
 } from "@/services/apiService";
 import { Teacher, Student, Classroom, Attendance } from "@/types/entities";
 import DashboardLayout from "@/components/DashboardLayout";
+import LoadingSpinner from "@/components/LoadingSpinner";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -65,14 +66,7 @@ export default function DashboardPage() {
   };
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">กำลังโหลด...</p>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner fullScreen={true} message="กำลังโหลดข้อมูลแดชบอร์ด..." />;
   }
 
   return (
@@ -82,7 +76,7 @@ export default function DashboardPage() {
         <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-2xl shadow-xl p-6 sm:p-8 text-white">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between">
             <div>
-              <h2 className="text-2xl sm:text-3xl font-bold mb-2">
+              <h2 className="text-xl sm:text-2xl md:text-3xl font-bold mb-3 leading-relaxed">
                 ยินดีต้อนรับ{" "}
                 {teacher
                   ? `${teacher.prefix?.name || ""}${teacher.firstname} ${
@@ -91,7 +85,7 @@ export default function DashboardPage() {
                   : "ครู"}
                 ! 👋
               </h2>
-              <p className="text-blue-100 text-lg">
+              <p className="text-blue-100 text-base sm:text-lg leading-relaxed">
                 เริ่มต้นจัดการการเข้าเรียนของนักเรียนได้เลย
               </p>
             </div>
@@ -132,15 +126,15 @@ export default function DashboardPage() {
                     </svg>
                   </div>
                   <div className="ml-4">
-                    <h3 className="text-lg font-semibold text-gray-800">
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-800 leading-relaxed">
                       รายชื่อนักเรียน
                     </h3>
-                    <p className="text-sm text-gray-600">
+                    <p className="text-sm text-gray-600 leading-relaxed">
                       จัดการข้อมูลนักเรียน
                     </p>
                   </div>
                 </div>
-                <p className="text-gray-600 mb-4 text-sm">
+                <p className="text-gray-600 mb-4 text-sm leading-relaxed">
                   ดูรายชื่อ เพิ่ม แก้ไข และจัดกลุ่มนักเรียนในระบบ
                 </p>
                 <button
@@ -170,13 +164,13 @@ export default function DashboardPage() {
                     </svg>
                   </div>
                   <div className="ml-4">
-                    <h3 className="text-lg font-semibold text-gray-800">
+                    <h3 className="text-base sm:text-lg font-semibold text-gray-800 leading-relaxed">
                       บันทึกการเข้าเรียน
                     </h3>
-                    <p className="text-sm text-gray-600">เช็คชื่อประจำวัน</p>
+                    <p className="text-sm text-gray-600 leading-relaxed">เช็คชื่อประจำวัน</p>
                   </div>
                 </div>
-                <p className="text-gray-600 mb-4 text-sm">
+                <p className="text-gray-600 mb-4 text-sm leading-relaxed">
                   บันทึกการเข้าเรียนของนักเรียนแต่ละวัน
                 </p>
                 <button
@@ -272,7 +266,10 @@ export default function DashboardPage() {
                 การดำเนินการด่วน
               </h3>
               <div className="space-y-3">
-                <button className="w-full text-left p-3 bg-gray-50 hover:bg-blue-50 rounded-xl transition-colors duration-200 flex items-center">
+                <button 
+                  onClick={() => router.push("/settings")}
+                  className="w-full text-left p-3 bg-gray-50 hover:bg-blue-50 rounded-xl transition-colors duration-200 flex items-center"
+                >
                   <svg
                     className="h-5 w-5 text-gray-600 mr-3"
                     fill="none"
@@ -294,7 +291,10 @@ export default function DashboardPage() {
                   </svg>
                   <span className="text-sm font-medium">การตั้งค่า</span>
                 </button>
-                <button className="w-full text-left p-3 bg-gray-50 hover:bg-blue-50 rounded-xl transition-colors duration-200 flex items-center">
+                <button 
+                  onClick={() => router.push("/schools")}
+                  className="w-full text-left p-3 bg-gray-50 hover:bg-blue-50 rounded-xl transition-colors duration-200 flex items-center"
+                >
                   <svg
                     className="h-5 w-5 text-gray-600 mr-3"
                     fill="none"
@@ -310,7 +310,10 @@ export default function DashboardPage() {
                   </svg>
                   <span className="text-sm font-medium">ข้อมูลโรงเรียน</span>
                 </button>
-                <button className="w-full text-left p-3 bg-gray-50 hover:bg-blue-50 rounded-xl transition-colors duration-200 flex items-center">
+                <button 
+                  onClick={() => router.push("/reports")}
+                  className="w-full text-left p-3 bg-gray-50 hover:bg-blue-50 rounded-xl transition-colors duration-200 flex items-center"
+                >
                   <svg
                     className="h-5 w-5 text-gray-600 mr-3"
                     fill="none"
@@ -321,10 +324,10 @@ export default function DashboardPage() {
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth={2}
-                      d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                      d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
                     />
                   </svg>
-                  <span className="text-sm font-medium">ความช่วยเหลือ</span>
+                  <span className="text-sm font-medium">รายงานสถิติ</span>
                 </button>
               </div>
             </div>

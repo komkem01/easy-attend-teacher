@@ -5,9 +5,13 @@ import { useRouter } from 'next/navigation';
 import { authService } from '@/services/authService';
 import { studentService, genderService, prefixService, teacherInfoService, classroomService, classroomMemberService } from '@/services/apiService';
 import { Student, Gender, Prefix, Classroom, CreateStudentRequest, UpdateStudentRequest } from '@/types/entities';
+import LoadingSpinner from '@/components/LoadingSpinner';
+import EmptyState from '@/components/EmptyState';
+import { useToast } from '@/components/Toast';
 
 export default function StudentsPage() {
   const router = useRouter();
+  const { showToast, ToastContainer } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [students, setStudents] = useState<Student[]>([]);
   const [genders, setGenders] = useState<Gender[]>([]);
@@ -18,6 +22,8 @@ export default function StudentsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [selectedClassroomForAdd, setSelectedClassroomForAdd] = useState<number>(0);
+  const [selectedClassroomFilter, setSelectedClassroomFilter] = useState<number | 'all'>('all');
+  const [viewMode, setViewMode] = useState<'all' | 'classroom'>('classroom');
   
   const [formData, setFormData] = useState<CreateStudentRequest>({
     school_id: 0,
@@ -111,8 +117,10 @@ export default function StudentsPage() {
       await loadData();
       setShowModal(false);
       resetForm();
+      showToast(editingStudent ? 'แก้ไขข้อมูลนักเรียนสำเร็จ' : 'เพิ่มนักเรียนสำเร็จ', 'success');
     } catch (error) {
       console.error('Error saving student:', error);
+      showToast('เกิดข้อผิดพลาดในการบันทึกข้อมูล', 'error');
     }
   };
 
@@ -136,8 +144,10 @@ export default function StudentsPage() {
       try {
         await studentService.deleteStudent(id);
         await loadData();
+        showToast('ลบนักเรียนสำเร็จ', 'success');
       } catch (error) {
         console.error('Error deleting student:', error);
+        showToast('เกิดข้อผิดพลาดในการลบนักเรียน', 'error');
       }
     }
   };
@@ -159,34 +169,59 @@ export default function StudentsPage() {
 
   const filteredStudents = useMemo(() => {
     if (!students || !Array.isArray(students)) return [];
-    if (!searchTerm) return students;
     
-    const searchLower = searchTerm.toLowerCase();
-    return students.filter((student) => {
-      if (!student) return false;
-      const firstname = student.firstname ? student.firstname.toLowerCase() : '';
-      const lastname = student.lastname ? student.lastname.toLowerCase() : '';
-      const studentId = student.student_id ? student.student_id.toLowerCase() : '';
-      
-      return firstname.includes(searchLower) || 
-             lastname.includes(searchLower) || 
-             studentId.includes(searchLower);
+    let filtered = students;
+    
+    // Filter by classroom if selected
+    if (selectedClassroomFilter !== 'all') {
+      const classroom = classrooms.find(c => c.id === selectedClassroomFilter);
+      if (classroom) {
+        filtered = filtered.filter(student => 
+          student.grade_level === classroom.grade_level && 
+          student.class_section === classroom.class_section
+        );
+      }
+    }
+    
+    // Filter by search term
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      filtered = filtered.filter((student) => {
+        if (!student) return false;
+        const firstname = student.firstname ? student.firstname.toLowerCase() : '';
+        const lastname = student.lastname ? student.lastname.toLowerCase() : '';
+        const studentId = student.student_id ? student.student_id.toLowerCase() : '';
+        
+        return firstname.includes(searchLower) || 
+               lastname.includes(searchLower) || 
+               studentId.includes(searchLower);
+      });
+    }
+    
+    return filtered;
+  }, [students, searchTerm, selectedClassroomFilter, classrooms]);
+
+  const getStudentsByClassroom = () => {
+    const classroomGroups: Record<string, Student[]> = {};
+    
+    classrooms.forEach(classroom => {
+      const key = `${classroom.grade_level}/${classroom.class_section}`;
+      classroomGroups[key] = students.filter(student => 
+        student.grade_level === classroom.grade_level && 
+        student.class_section === classroom.class_section
+      );
     });
-  }, [students, searchTerm]);
+    
+    return classroomGroups;
+  };
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">กำลังโหลด...</p>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner fullScreen={true} message="กำลังโหลดข้อมูลนักเรียน..." />;
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-100">
+      <ToastContainer />
       {/* Header */}
       <div className="bg-white/80 backdrop-blur-sm shadow-lg border-b border-blue-100 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -233,26 +268,155 @@ export default function StudentsPage() {
           </div>
         )}
 
-        {/* Search */}
+        {/* View Mode Toggle */}
         <div className="mb-6">
-          <div className="relative">
-            <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-            <input
-              type="text"
-              placeholder="ค้นหานักเรียน..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-3 focus:ring-blue-100 focus:border-blue-400 transition-all duration-200"
-            />
+          <div className="flex flex-col sm:flex-row gap-4 justify-between">
+            <div className="flex bg-white/80 backdrop-blur-sm rounded-xl p-1 shadow-lg border border-blue-100">
+              <button
+                onClick={() => setViewMode('classroom')}
+                className={`px-4 py-2 rounded-lg transition-all duration-200 font-medium ${
+                  viewMode === 'classroom'
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'text-gray-600 hover:text-blue-600'
+                }`}
+              >
+                แยกตามห้องเรียน
+              </button>
+              <button
+                onClick={() => setViewMode('all')}
+                className={`px-4 py-2 rounded-lg transition-all duration-200 font-medium ${
+                  viewMode === 'all'
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'text-gray-600 hover:text-blue-600'
+                }`}
+              >
+                ดูทั้งหมด
+              </button>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3">
+              {/* Classroom Filter */}
+              {viewMode === 'all' && (
+                <select
+                  value={selectedClassroomFilter}
+                  onChange={(e) => setSelectedClassroomFilter(e.target.value === 'all' ? 'all' : parseInt(e.target.value))}
+                  className="px-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-3 focus:ring-blue-100 focus:border-blue-400 transition-all duration-200 bg-white/80 backdrop-blur-sm"
+                >
+                  <option value="all">ทุกห้องเรียน</option>
+                  {classrooms.map(classroom => (
+                    <option key={classroom.id} value={classroom.id}>
+                      {classroom.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              {/* Search */}
+              <div className="relative">
+                <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input
+                  type="text"
+                  placeholder="ค้นหานักเรียน..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 pr-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-3 focus:ring-blue-100 focus:border-blue-400 transition-all duration-200 bg-white/80 backdrop-blur-sm"
+                />
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Students List */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredStudents.map((student) => (
-            <div key={student.id} className="bg-white/70 backdrop-blur-sm rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 border border-white/50">
+        {/* Students Content */}
+        {viewMode === 'classroom' ? (
+          // Classroom View
+          <div className="space-y-8">
+            {Object.entries(getStudentsByClassroom()).map(([classKey, classStudents]) => {
+              const filtered = classStudents.filter(student => {
+                if (!searchTerm) return true;
+                const searchLower = searchTerm.toLowerCase();
+                const firstname = student.firstname ? student.firstname.toLowerCase() : '';
+                const lastname = student.lastname ? student.lastname.toLowerCase() : '';
+                const studentId = student.student_id ? student.student_id.toLowerCase() : '';
+                return firstname.includes(searchLower) || 
+                       lastname.includes(searchLower) || 
+                       studentId.includes(searchLower);
+              });
+              
+              if (filtered.length === 0) return null;
+              
+              return (
+                <div key={classKey} className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-blue-100 p-6">
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center space-x-3">
+                      <div className="h-10 w-10 bg-gradient-to-r from-green-400 to-green-500 rounded-xl flex items-center justify-center">
+                        <svg className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        </svg>
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-800">ห้องเรียน {classKey}</h3>
+                        <p className="text-sm text-gray-600">{filtered.length} นักเรียน</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {filtered.map((student) => (
+                      <div key={student.id} className="bg-white/70 backdrop-blur-sm rounded-xl shadow-md hover:shadow-lg transition-all duration-300 p-4 border border-white/50">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center space-x-3">
+                            <div className="h-10 w-10 bg-gradient-to-r from-blue-400 to-blue-500 rounded-full flex items-center justify-center">
+                              <span className="text-white font-medium text-sm">
+                                {student.firstname?.charAt(0) || '?'}
+                              </span>
+                            </div>
+                            <div>
+                              <h4 className="font-medium text-gray-800">
+                                {student.prefix?.name || ''}{student.firstname} {student.lastname}
+                              </h4>
+                              <p className="text-sm text-gray-600">
+                                รหัส: {student.student_id}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex space-x-1">
+                            <button
+                              onClick={() => handleEdit(student)}
+                              className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors duration-200"
+                            >
+                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={() => handleDelete(student.id)}
+                              className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors duration-200"
+                            >
+                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                        <div className="text-xs text-gray-500 bg-gray-100 rounded-lg px-2 py-1 inline-block">
+                          {student.gender?.name || 'ไม่ระบุเพศ'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          // All Students View
+          <div>
+            {filteredStudents.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredStudents.map((student) => (
+                  <div key={student.id} className="bg-white/70 backdrop-blur-sm rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 p-6 border border-white/50">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center space-x-3">
                   <div className="h-12 w-12 bg-gradient-to-r from-blue-400 to-blue-500 rounded-full flex items-center justify-center">
@@ -301,10 +465,21 @@ export default function StudentsPage() {
           ))}
         </div>
 
-        {filteredStudents.length === 0 && (
-          <div className="text-center py-12">
-            <div className="text-gray-400 text-6xl mb-4">👨‍🎓</div>
-            <p className="text-gray-500 text-lg">ไม่พบนักเรียน</p>
+            ) : (
+              <EmptyState
+                icon={
+                  <svg className="h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                }
+                title="ยังไม่มีนักเรียน"
+                description="เริ่มต้นการจัดการนักเรียนด้วยการเพิ่มนักเรียนคนแรก"
+                action={{
+                  label: "เพิ่มนักเรียน",
+                  onClick: () => setShowModal(true)
+                }}
+              />
+            )}
           </div>
         )}
       </div>

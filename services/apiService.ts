@@ -1,4 +1,5 @@
-import api from '@/lib/api';
+// Mock-backed services: no HTTP calls
+import { mockDataStore, mockGenders, mockPrefixes, mockSchools, mockTeacher } from '@/lib/mockData';
 import {
   Teacher,
   Student,
@@ -8,10 +9,6 @@ import {
   Classroom,
   ClassroomMember,
   Attendance,
-  CreateClassroomMemberRequest,
-  ApiResponse,
-  PaginatedResponse,
-  ProfileResponse,
   CreateStudentRequest,
   CreateClassroomRequest,
   CreateAttendanceRequest,
@@ -21,475 +18,304 @@ import {
 // Auth Profile - ไม่ใช้แล้ว ใช้ teacherInfoService แทน
 export const profileService = {
   async getProfile(): Promise<Teacher> {
-    try {
-      // ใช้ dashboard endpoint แทน
-      const response = await api.get('/dashboard');
-      console.log('Profile (dashboard) API response:', response.data);
-
-      if (response.data.success && response.data.data) {
-        // ดึงข้อมูล teacher จาก dashboard
-        return response.data.data.teacher || response.data.data;
-      }
-      return response.data.data || response.data;
-    } catch (error: any) {
-      console.error('Get profile error:', error);
-      throw error;
-    }
+    return mockTeacher;
   },
-
   async logout(): Promise<void> {
-    try {
-      await api.post('/logout');
-    } catch (error: any) {
-      console.error('Logout error:', error);
-      throw error;
-    }
+    return;
   }
 };
 
 // Teacher Info service (Dashboard API)
 export const teacherInfoService = {
   async getTeacherInfo(): Promise<any> {
-    try {
-      const response = await api.get('/dashboard');
-      if (response.data.success) {
-        return response.data.data;
-      }
-      return response.data;
-    } catch (error: any) {
-      console.error('Get teacher info error:', error);
-      throw error;
-    }
+    // Compose a dashboard-like payload
+    const classrooms = mockDataStore.getClassrooms();
+    const students = mockDataStore.getStudents();
+    const attendances = mockDataStore.getAttendances();
+    const total_stats = {
+      total_students: students.length,
+      total_classrooms: classrooms.length,
+      total_attendance: attendances.filter(a => a.attendance_date === new Date().toISOString().split('T')[0]).length,
+      attendance_rate: 95,
+    };
+
+    return {
+      teacher: mockTeacher,
+      classrooms,
+      total_stats,
+      recent_activities: [],
+    };
   }
 };
 
 // Teacher services
 export const teacherService = {
   async getAllTeachers(): Promise<Teacher[]> {
-    try {
-      const response = await api.get('/teachers');
-      return response.data.status?.code === 200 ? response.data.data : response.data;
-    } catch (error: any) {
-      console.error('Get teachers error:', error);
-      throw error;
-    }
+    return [mockTeacher];
   },
 
   async getTeacherById(id: number): Promise<Teacher> {
-    try {
-      const response = await api.get(`/teachers/${id}`);
-      return response.data.status?.code === 200 ? response.data.data : response.data;
-    } catch (error: any) {
-      console.error('Get teacher error:', error);
-      throw error;
-    }
+    return mockTeacher;
   }
 };
 
 // Student services
 export const studentService = {
   async getAllStudents(): Promise<Student[]> {
-    try {
-      // ดึงจาก dashboard แทน
-      const response = await api.get('/dashboard');
-      if (response.data.success && response.data.data?.classrooms) {
-        // รวมนักเรียนจากทุกห้องเรียน
-        const students: Student[] = [];
-        response.data.data.classrooms.forEach((classroom: any) => {
-          if (classroom.students) {
-            students.push(...classroom.students);
-          }
-        });
-        return students;
-      }
-      return [];
-    } catch (error: any) {
-      console.error('Get students error:', error);
-      throw error;
-    }
+    return mockDataStore.getStudents();
   },
 
   async getMyStudents(): Promise<Student[]> {
-    try {
-      // ดึงจาก dashboard
-      const response = await api.get('/dashboard');
-      if (response.data.success && response.data.data?.classrooms) {
-        const students: Student[] = [];
-        response.data.data.classrooms.forEach((classroom: any) => {
-          if (classroom.students) {
-            students.push(...classroom.students);
-          }
-        });
-        return students;
-      }
-      return [];
-    } catch (error: any) {
-      console.error('Get my students error:', error);
-      throw error;
-    }
+    return mockDataStore.getStudents();
   },
 
   async getStudentById(id: number): Promise<Student> {
-    try {
-      const response = await api.get(`/students/${id}`);
-      if (response.data.success) {
-        return response.data.data;
-      }
-      return response.data;
-    } catch (error: any) {
-      console.error('Get student error:', error);
-      throw error;
-    }
+    const student = mockDataStore.getStudents().find(s => s.id === id);
+    if (!student) throw new Error('Student not found');
+    return student;
   },
 
   async createStudent(studentData: CreateStudentRequest): Promise<Student> {
-    try {
-      const response = await api.post('/students', studentData);
-      if (response.data.success) {
-        return response.data.data;
-      }
-      return response.data;
-    } catch (error: any) {
-      console.error('Create student error:', error);
-      throw error;
-    }
+    const student_id = studentData.student_no && studentData.student_no.trim() !== ''
+      ? studentData.student_no
+      : `STD${String(mockDataStore.getStudents().length + 1).padStart(3, '0')}`;
+    const newStudent = mockDataStore.addStudent({
+      id: 0 as any, // will be replaced in store
+      school_id: studentData.school_id,
+      student_id,
+      firstname: studentData.firstname,
+      lastname: studentData.lastname,
+      phone: undefined,
+      gender_id: studentData.gender_id || 1,
+      prefix_id: studentData.prefix_id || 1,
+      grade_level: studentData.grade_level,
+      class_section: studentData.class_section,
+      created_at: '' as any,
+      updated_at: '' as any,
+    } as unknown as Student);
+    return newStudent;
   },
 
   async updateStudent(id: number, studentData: Partial<CreateStudentRequest>): Promise<Student> {
-    try {
-      const response = await api.put(`/students/${id}`, studentData);
-      if (response.data.success) {
-        return response.data.data;
-      }
-      return response.data;
-    } catch (error: any) {
-      console.error('Update student error:', error);
-      throw error;
-    }
+    const mapped: Partial<Student> = {
+      firstname: studentData.firstname,
+      lastname: studentData.lastname,
+      gender_id: studentData.gender_id ?? undefined,
+      prefix_id: studentData.prefix_id ?? undefined,
+      grade_level: studentData.grade_level,
+      class_section: studentData.class_section,
+      student_id: (studentData as any).student_no,
+    };
+    const updated = mockDataStore.updateStudent(id, mapped);
+    if (!updated) throw new Error('Update failed');
+    return updated;
   },
 
   async deleteStudent(id: number): Promise<void> {
-    try {
-      await api.delete(`/students/${id}`);
-    } catch (error: any) {
-      console.error('Delete student error:', error);
-      throw error;
-    }
+    mockDataStore.deleteStudent(id);
   }
 };
 
 // School services
 export const schoolService = {
   async getAllSchools(): Promise<School[]> {
-    try {
-      const response = await api.get('/schools');
-      if (response.data.success) {
-        return response.data.data;
-      }
-      return response.data;
-    } catch (error: any) {
-      console.error('Get schools error:', error);
-      throw error;
-    }
+    return mockSchools;
   },
 
   async getSchoolById(id: number): Promise<School> {
-    try {
-      const response = await api.get(`/schools/${id}`);
-      if (response.data.success) {
-        return response.data.data;
-      }
-      return response.data;
-    } catch (error: any) {
-      console.error('Get school error:', error);
-      throw error;
-    }
+    const school = mockSchools.find(s => s.id === id);
+    if (!school) throw new Error('School not found');
+    return school;
   }
 };
 
 // Gender services
 export const genderService = {
   async getAllGenders(): Promise<Gender[]> {
-    try {
-      const response = await api.get('/genders');
-      if (response.data.success) {
-        return response.data.data;
-      }
-      return response.data;
-    } catch (error: any) {
-      console.error('Get genders error:', error);
-      throw error;
-    }
+    return mockGenders;
   }
 };
 
 // Prefix services
 export const prefixService = {
   async getAllPrefixes(): Promise<Prefix[]> {
-    try {
-      const response = await api.get('/prefixes');
-      if (response.data.success) {
-        return response.data.data;
-      }
-      return response.data;
-    } catch (error: any) {
-      console.error('Get prefixes error:', error);
-      throw error;
-    }
+    return mockPrefixes;
   }
 };
 
 // Classroom services
 export const classroomService = {
   async getAllClassrooms(): Promise<Classroom[]> {
-    try {
-      // ดึงจาก dashboard
-      const response = await api.get('/dashboard');
-      if (response.data.success && response.data.data?.classrooms) {
-        return response.data.data.classrooms;
-      }
-      return [];
-    } catch (error: any) {
-      console.error('Get classrooms error:', error);
-      throw error;
-    }
+    return mockDataStore.getClassrooms();
   },
 
   async getMyClassrooms(): Promise<Classroom[]> {
-    try {
-      // ดึงจาก dashboard
-      const response = await api.get('/dashboard');
-      if (response.data.success && response.data.data?.classrooms) {
-        return response.data.data.classrooms;
-      }
-      return [];
-    } catch (error: any) {
-      console.error('Get my classrooms error:', error);
-      throw error;
-    }
+    return mockDataStore.getClassrooms();
   },
 
   async getClassroomById(id: number): Promise<any> {
-    try {
-      const response = await api.get(`/classrooms/${id}`);
-      if (response.data.success) {
-        return response.data.data;
-      }
-      return response.data;
-    } catch (error: any) {
-      console.error('Get classroom error:', error);
-      throw error;
-    }
+    const c = mockDataStore.getClassroomById(id);
+    if (!c) throw new Error('Classroom not found');
+    return c;
   },
 
   async getClassroomStudents(classroomId: number, page: number = 1, limit: number = 50): Promise<Student[]> {
-    try {
-      const response = await api.get(`/classrooms/${classroomId}/students?page=${page}&limit=${limit}`);
-      if (response.data.success) {
-        return response.data.data;
-      }
-      return response.data;
-    } catch (error: any) {
-      console.error('Get classroom students error:', error);
-      throw error;
-    }
+    const classroom = mockDataStore.getClassroomById(classroomId);
+    const list = classroom
+      ? mockDataStore.getStudents().filter(s => s.grade_level === classroom.grade_level && s.class_section === classroom.class_section)
+      : [];
+    const start = (page - 1) * limit;
+    return list.slice(start, start + limit);
   },
 
   async createClassroom(classroomData: CreateClassroomRequest): Promise<Classroom> {
-    try {
-      const response = await api.post('/classrooms', classroomData);
-      if (response.data.success) {
-        return response.data.data;
-      }
-      return response.data;
-    } catch (error: any) {
-      console.error('Create classroom error:', error);
-      throw error;
-    }
+    const classroom = mockDataStore.addClassroom({
+      school_id: classroomData.school_id,
+      teacher_id: mockTeacher.id,
+      name: classroomData.name,
+      description: classroomData.description,
+      grade_level: classroomData.grade_level,
+      class_section: classroomData.class_section,
+      subject: classroomData.subject,
+      created_at: '' as any,
+      updated_at: '' as any,
+      id: 0 as any,
+    } as unknown as Classroom);
+    return classroom;
   },
 
   async updateClassroom(id: number, classroomData: Partial<CreateClassroomRequest>): Promise<Classroom> {
-    try {
-      const response = await api.put(`/classrooms/${id}`, classroomData);
-      if (response.data.success) {
-        return response.data.data;
-      }
-      return response.data;
-    } catch (error: any) {
-      console.error('Update classroom error:', error);
-      throw error;
-    }
+    const updated = mockDataStore.updateClassroom(id, classroomData as any);
+    if (!updated) throw new Error('Update failed');
+    return updated;
   },
 
   async deleteClassroom(id: number): Promise<void> {
-    try {
-      await api.delete(`/classrooms/${id}`);
-    } catch (error: any) {
-      console.error('Delete classroom error:', error);
-      throw error;
-    }
+    mockDataStore.deleteClassroom(id);
   }
 };
 
 // Classroom Member services
 export const classroomMemberService = {
   async getAllClassroomMembers(): Promise<ClassroomMember[]> {
-    try {
-      const response = await api.get('/classroom-members');
-      if (response.data.success) {
-        return response.data.data;
-      }
-      return response.data;
-    } catch (error: any) {
-      console.error('Get classroom members error:', error);
-      throw error;
-    }
+    // Derive by matching student grade/section to classroom
+    const members: ClassroomMember[] = [];
+    mockDataStore.getClassrooms().forEach((c) => {
+      const students = mockDataStore.getStudents().filter(s => s.grade_level === c.grade_level && s.class_section === c.class_section);
+      students.forEach((s) => {
+        members.push({
+          classroom_id: c.id,
+          member_id: s.id,
+          role: 'student',
+          joined_at: now(),
+          classroom: c,
+          student: s,
+        });
+      });
+    });
+    return members;
   },
 
   async getClassroomMembersByClassroomId(classroomId: number): Promise<ClassroomMember[]> {
-    try {
-      const response = await api.get(`/classroom-members/classroom/${classroomId}`);
-      if (response.data.success) {
-        return response.data.data;
-      }
-      return response.data;
-    } catch (error: any) {
-      console.error('Get classroom members by classroom error:', error);
-      throw error;
-    }
+    const classroom = mockDataStore.getClassroomById(classroomId);
+    const students = classroom
+      ? mockDataStore.getStudents().filter(s => s.grade_level === classroom.grade_level && s.class_section === classroom.class_section)
+      : [];
+    return students.map((s) => ({
+      classroom_id: classroomId,
+      member_id: s.id,
+      role: 'student',
+      joined_at: now(),
+      student: s,
+      classroom: classroom || undefined,
+    }));
   },
 
   async addMemberToClassroom(classroomId: number, memberId: number): Promise<ClassroomMember> {
-    try {
-      const response = await api.post('/classroom-members', {
-        classroom_id: classroomId,
-        member_id: memberId,
-        role: 'student'
-      });
-      if (response.data.success) {
-        return response.data.data;
-      }
-      return response.data;
-    } catch (error: any) {
-      console.error('Add classroom member error:', error);
-      throw error;
-    }
+    // Reassign student's grade/section to match classroom
+    const classroom = mockDataStore.getClassroomById(classroomId);
+    if (!classroom) throw new Error('Classroom not found');
+    const updated = mockDataStore.updateStudent(memberId, {
+      grade_level: classroom.grade_level,
+      class_section: classroom.class_section,
+    });
+    if (!updated) throw new Error('Student not found');
+    return {
+      classroom_id: classroomId,
+      member_id: memberId,
+      role: 'student',
+      joined_at: now(),
+      classroom,
+      student: updated,
+    };
   },
 
   async removeMemberFromClassroom(classroomId: number, memberId: number): Promise<void> {
-    try {
-      await api.delete(`/classroom-members/${classroomId}/${memberId}`);
-    } catch (error: any) {
-      console.error('Remove classroom member error:', error);
-      throw error;
-    }
+    // Remove by moving student out of this class (clear section)
+    mockDataStore.updateStudent(memberId, { class_section: undefined, grade_level: undefined });
   }
 };
 
 // Attendance services
 export const attendanceService = {
   async getAllAttendances(): Promise<Attendance[]> {
-    try {
-      const response = await api.get('/attendance/history');
-      if (response.data.success) {
-        return response.data.data;
-      }
-      return response.data;
-    } catch (error: any) {
-      console.error('Get attendances error:', error);
-      throw error;
-    }
+    return mockDataStore.getAttendances();
   },
 
   async getMyAttendances(): Promise<Attendance[]> {
-    try {
-      const response = await api.get('/attendance/history');
-      if (response.data.success) {
-        return response.data.data;
-      }
-      return response.data;
-    } catch (error: any) {
-      console.error('Get my attendances error:', error);
-      throw error;
-    }
+    return mockDataStore.getAttendances();
   },
 
   async getAttendanceById(id: number): Promise<Attendance> {
-    try {
-      const response = await api.get(`/attendances/${id}`);
-      if (response.data.success) {
-        return response.data.data;
-      }
-      return response.data;
-    } catch (error: any) {
-      console.error('Get attendance error:', error);
-      throw error;
-    }
+    const att = mockDataStore.getAttendances().find(a => a.id === id);
+    if (!att) throw new Error('Attendance not found');
+    return att;
   },
 
   async getAttendancesByClassroom(classroomId: number, dateFrom?: string, dateTo?: string): Promise<Attendance[]> {
-    try {
-      let url = `/attendance/history?classroom_id=${classroomId}`;
-      if (dateFrom) url += `&date_from=${dateFrom}`;
-      if (dateTo) url += `&date_to=${dateTo}`;
-      
-      const response = await api.get(url);
-      if (response.data.success) {
-        return response.data.data;
-      }
-      return response.data;
-    } catch (error: any) {
-      console.error('Get attendances by classroom error:', error);
-      throw error;
-    }
+    return mockDataStore.getAttendanceHistory({ classroom_id: classroomId, date_from: dateFrom, date_to: dateTo });
   },
 
   async getAttendancesByStudent(studentId: number): Promise<Attendance[]> {
-    try {
-      const response = await api.get(`/attendances/student/${studentId}`);
-      if (response.data.success) {
-        return response.data.data;
-      }
-      return response.data;
-    } catch (error: any) {
-      console.error('Get attendances by student error:', error);
-      throw error;
-    }
+    return mockDataStore.getAttendances().filter(a => a.student_id === studentId);
   },
 
   async createAttendance(attendanceData: CreateAttendanceRequest): Promise<any> {
-    try {
-      const response = await api.post('/attendance', attendanceData);
-      if (response.data.success) {
-        return response.data.data;
-      }
-      return response.data;
-    } catch (error: any) {
-      console.error('Create attendance error:', error);
-      throw error;
-    }
+    const created = mockDataStore.addAttendance({
+      classroom_id: attendanceData.classroom_id,
+      student_id: attendanceData.student_id,
+      attendance_date: attendanceData.attendance_date,
+      status: attendanceData.status,
+      check_in_time: attendanceData.check_in_time,
+      notes: attendanceData.notes,
+      recorded_by: mockTeacher.id,
+      created_at: '' as any,
+      updated_at: '' as any,
+      id: 0 as any,
+    } as unknown as Attendance);
+    return created;
   },
 
   async updateAttendance(id: number, attendanceData: Partial<CreateAttendanceRequest>): Promise<Attendance> {
-    try {
-      const response = await api.put(`/attendances/${id}`, attendanceData);
-      if (response.data.success) {
-        return response.data.data;
-      }
-      return response.data;
-    } catch (error: any) {
-      console.error('Update attendance error:', error);
-      throw error;
-    }
+    const list = mockDataStore.getAttendances();
+    const idx = list.findIndex(a => a.id === id);
+    if (idx === -1) throw new Error('Attendance not found');
+    const updated: Attendance = {
+      ...list[idx],
+      attendance_date: attendanceData.attendance_date || list[idx].attendance_date,
+      status: (attendanceData.status as any) || list[idx].status,
+      check_in_time: attendanceData.check_in_time || list[idx].check_in_time,
+      notes: attendanceData.notes ?? list[idx].notes,
+      updated_at: new Date().toISOString(),
+    };
+    list[idx] = updated;
+    return updated;
   },
 
   async deleteAttendance(id: number): Promise<void> {
-    try {
-      await api.delete(`/attendances/${id}`);
-    } catch (error: any) {
-      console.error('Delete attendance error:', error);
-      throw error;
-    }
+    const list = mockDataStore.getAttendances();
+    const idx = list.findIndex(a => a.id === id);
+    if (idx >= 0) list.splice(idx, 1);
   }
 };
 
@@ -514,3 +340,7 @@ export const statsService = {
     };
   }
 };
+
+function now(): string {
+  return new Date().toISOString();
+}

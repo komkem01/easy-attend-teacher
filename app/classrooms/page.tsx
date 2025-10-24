@@ -5,9 +5,12 @@ import { useRouter } from 'next/navigation';
 import { authService } from '@/services/authService';
 import { classroomService, classroomMemberService, studentService, teacherInfoService } from '@/services/apiService';
 import { Classroom, ClassroomMember, Student, CreateClassroomRequest } from '@/types/entities';
+import LoadingSpinner from '@/components/LoadingSpinner';
+import { useToast } from '@/components/Toast';
 
 export default function ClassroomsPage() {
   const router = useRouter();
+  const { showToast, ToastContainer } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -117,8 +120,10 @@ export default function ClassroomsPage() {
       setEditingClassroom(null);
       resetForm();
       loadData();
+      showToast(editingClassroom ? 'แก้ไขห้องเรียนสำเร็จ' : 'เพิ่มห้องเรียนสำเร็จ', 'success');
     } catch (error) {
       console.error('Error saving classroom:', error);
+      showToast('เกิดข้อผิดพลาดในการบันทึกข้อมูล', 'error');
     }
   };
 
@@ -140,8 +145,10 @@ export default function ClassroomsPage() {
       try {
         await classroomService.deleteClassroom(id);
         loadData();
+        showToast('ลบห้องเรียนสำเร็จ', 'success');
       } catch (error) {
         console.error('Error deleting classroom:', error);
+        showToast('เกิดข้อผิดพลาดในการลบห้องเรียน', 'error');
       }
     }
   };
@@ -158,8 +165,10 @@ export default function ClassroomsPage() {
     try {
       await classroomMemberService.addMemberToClassroom(selectedClassroom.id, studentId);
       await loadClassroomMembers(selectedClassroom.id);
+      showToast('เพิ่มนักเรียนเข้าห้องเรียนสำเร็จ', 'success');
     } catch (error) {
       console.error('Error adding member:', error);
+      showToast('เกิดข้อผิดพลาดในการเพิ่มนักเรียน', 'error');
     }
   };
 
@@ -169,8 +178,10 @@ export default function ClassroomsPage() {
     try {
       await classroomMemberService.removeMemberFromClassroom(selectedClassroom.id, studentId);
       await loadClassroomMembers(selectedClassroom.id);
+      showToast('ลบนักเรียนออกจากห้องเรียนสำเร็จ', 'success');
     } catch (error) {
       console.error('Error removing member:', error);
+      showToast('เกิดข้อผิดพลาดในการลบนักเรียน', 'error');
     }
   };
 
@@ -191,18 +202,12 @@ export default function ClassroomsPage() {
   );
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">กำลังโหลด...</p>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner fullScreen={true} message="กำลังโหลดข้อมูลห้องเรียน..." />;
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-100">
+      <ToastContainer />
       {/* Header */}
       <div className="bg-white/80 backdrop-blur-sm shadow-lg border-b border-blue-100 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -305,12 +310,20 @@ export default function ClassroomsPage() {
                 </div>
               </div>
 
-              <button
-                onClick={() => handleViewMembers(classroom)}
-                className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-medium py-2 px-4 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-md"
-              >
-                จัดการสมาชิก
-              </button>
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => router.push(`/classrooms/${classroom.id}`)}
+                  className="flex-1 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-medium py-2 px-4 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-md"
+                >
+                  ดูรายละเอียด
+                </button>
+                <button
+                  onClick={() => handleViewMembers(classroom)}
+                  className="flex-1 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-medium py-2 px-4 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-md"
+                >
+                  จัดการสมาชิก
+                </button>
+              </div>
             </div>
           ))}
         </div>

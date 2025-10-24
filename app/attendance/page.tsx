@@ -5,15 +5,18 @@ import { useRouter } from 'next/navigation';
 import { authService } from '@/services/authService';
 import { attendanceService, classroomService, classroomMemberService, studentService, teacherInfoService } from '@/services/apiService';
 import { Attendance, Classroom, ClassroomMember, Student, CreateAttendanceRequest } from '@/types/entities';
+import LoadingSpinner from '@/components/LoadingSpinner';
+import { useToast } from '@/components/Toast';
 
 interface AttendanceRecord {
   student: Student;
-  status: 'present' | 'absent' | 'late' | 'excused';
+  status: 'present' | 'absent' | 'late' | 'excused' | 'pending';
   notes?: string;
 }
 
 export default function AttendancePage() {
   const router = useRouter();
+  const { showToast, ToastContainer } = useToast();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [classrooms, setClassrooms] = useState<Classroom[]>([]);
@@ -82,12 +85,12 @@ export default function AttendancePage() {
       );
       setExistingAttendance(todayAttendance);
 
-      // Initialize attendance records
+      // Initialize attendance records with "รอเช็คชื่อ" as default
       const records: AttendanceRecord[] = (classroomStudents || []).map(student => {
         const existingRecord = (todayAttendance || []).find(att => att.student_id === student.id);
         return {
           student,
-          status: existingRecord?.status || 'present',
+          status: existingRecord?.status || 'pending', // Change default to 'pending'
           notes: existingRecord?.notes || ''
         };
       });
@@ -108,7 +111,7 @@ export default function AttendancePage() {
     }
   };
 
-  const handleStatusChange = (studentId: number, status: 'present' | 'absent' | 'late' | 'excused') => {
+  const handleStatusChange = (studentId: number, status: 'present' | 'absent' | 'late' | 'excused' | 'pending') => {
     setAttendanceRecords(prev => 
       prev.map(record => 
         record.student.id === studentId 
@@ -135,11 +138,16 @@ export default function AttendancePage() {
       setIsSaving(true);
       
       for (const record of attendanceRecords) {
+        // Skip saving records with 'pending' status
+        if (record.status === 'pending') {
+          continue;
+        }
+
         const attendanceData: CreateAttendanceRequest = {
           classroom_id: selectedClassroom.id,
           student_id: record.student.id,
           attendance_date: attendanceDate,
-          status: record.status,
+          status: record.status as 'present' | 'absent' | 'late' | 'excused',
           check_in_time: new Date().toISOString(),
           notes: record.notes
         };
@@ -156,7 +164,7 @@ export default function AttendancePage() {
         }
       }
 
-      alert('บันทึกการเข้าเรียนสำเร็จ!');
+      showToast('บันทึกการเข้าเรียนสำเร็จ!', 'success');
       
       // Reload to get updated data
       if (selectedClassroom) {
@@ -165,7 +173,7 @@ export default function AttendancePage() {
       
     } catch (error) {
       console.error('Error saving attendance:', error);
-      alert('เกิดข้อผิดพลาดในการบันทึก');
+      showToast('เกิดข้อผิดพลาดในการบันทึก', 'error');
     } finally {
       setIsSaving(false);
     }
@@ -189,6 +197,7 @@ export default function AttendancePage() {
       case 'absent': return 'bg-red-100 text-red-800 border-red-200';
       case 'late': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
       case 'excused': return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'pending': return 'bg-orange-100 text-orange-800 border-orange-200';
       default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
@@ -199,52 +208,53 @@ export default function AttendancePage() {
       case 'absent': return 'ขาดเรียน';
       case 'late': return 'มาสาย';
       case 'excused': return 'ลาป่วย';
+      case 'pending': return 'รอเช็คชื่อ';
       default: return status;
     }
   };
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-          <p className="mt-4 text-gray-600">กำลังโหลด...</p>
-        </div>
-      </div>
-    );
+    return <LoadingSpinner fullScreen={true} message="กำลังโหลดข้อมูลการเข้าเรียน..." />;
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-100">
+      <ToastContainer />
       {/* Header */}
       <div className="bg-white/80 backdrop-blur-sm shadow-lg border-b border-blue-100 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16 sm:h-20">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center py-4 space-y-3 sm:space-y-0 sm:h-20">
             <div className="flex items-center space-x-3">
               <button
                 onClick={() => router.push('/dashboard')}
-                className="text-blue-600 hover:text-blue-800 transition-colors"
+                className="text-blue-600 hover:text-blue-800 transition-colors p-2 -ml-2 rounded-lg hover:bg-blue-50"
               >
                 <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
               </button>
-              <h1 className="text-xl sm:text-2xl font-bold text-gray-800">บันทึกการเข้าเรียน</h1>
+              <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-800 leading-relaxed">บันทึกการเข้าเรียน</h1>
             </div>
-            <div className="flex space-x-3">
+            <div className="flex flex-wrap gap-2 sm:space-x-3 w-full sm:w-auto">
+              <button
+                onClick={() => router.push('/reports')}
+                className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-medium py-2.5 px-4 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-md text-sm"
+              >
+                ดูรายงาน
+              </button>
               {selectedClassroom && (
                 <button
                   onClick={loadAttendanceHistory}
-                  className="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white font-medium py-2 px-4 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-md"
+                  className="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white font-medium py-2.5 px-4 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-md text-sm"
                 >
                   ดูประวัติ
                 </button>
               )}
-              {attendanceRecords.length > 0 && (
+              {attendanceRecords.length > 0 && attendanceRecords.some(r => r.status !== 'pending') && (
                 <button
                   onClick={handleSaveAttendance}
                   disabled={isSaving}
-                  className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-medium py-2 px-4 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-md disabled:opacity-50"
+                  className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white font-medium py-2.5 px-4 rounded-xl transition-all duration-200 transform hover:scale-105 shadow-md disabled:opacity-50 text-sm"
                 >
                   {isSaving ? 'กำลังบันทึก...' : 'บันทึกการเข้าเรียน'}
                 </button>
@@ -256,14 +266,14 @@ export default function AttendancePage() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {/* Selection Controls */}
-        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-blue-100 p-6 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-blue-100 p-4 md:p-6 mb-6">
+          <div className="space-y-4 md:space-y-0 md:grid md:grid-cols-2 md:gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">เลือกห้องเรียน</label>
+              <label className="block text-sm font-medium text-gray-700 mb-3 leading-relaxed">เลือกห้องเรียน</label>
               <select
                 value={selectedClassroom?.id || ''}
                 onChange={(e) => handleClassroomChange(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-3 focus:ring-blue-100 focus:border-blue-400 transition-all duration-200"
+                className="w-full px-4 py-4 text-base border border-gray-200 rounded-xl focus:outline-none focus:ring-3 focus:ring-blue-100 focus:border-blue-400 transition-all duration-200 bg-white shadow-sm leading-relaxed"
               >
                 <option value="">เลือกห้องเรียน</option>
                 {(classrooms || []).map(classroom => (
@@ -275,7 +285,7 @@ export default function AttendancePage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">วันที่</label>
+              <label className="block text-sm font-medium text-gray-700 mb-3 leading-relaxed">วันที่</label>
               <input
                 type="date"
                 value={attendanceDate}
@@ -285,7 +295,7 @@ export default function AttendancePage() {
                     loadClassroomStudents(selectedClassroom);
                   }
                 }}
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-3 focus:ring-blue-100 focus:border-blue-400 transition-all duration-200"
+                className="w-full px-4 py-4 text-base border border-gray-200 rounded-xl focus:outline-none focus:ring-3 focus:ring-blue-100 focus:border-blue-400 transition-all duration-200 bg-white shadow-sm"
               />
             </div>
           </div>
@@ -293,47 +303,49 @@ export default function AttendancePage() {
 
         {/* Attendance List */}
         {selectedClassroom && attendanceRecords.length > 0 && (
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-blue-100 p-6">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold text-gray-800">
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-blue-100 p-4 md:p-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 space-y-2 sm:space-y-0">
+              <h2 className="text-lg md:text-xl font-bold text-gray-800 leading-relaxed">
                 {selectedClassroom.name} - {new Date(attendanceDate).toLocaleDateString('th-TH')}
               </h2>
-              <div className="text-sm text-gray-600">
+              <div className="text-sm text-gray-600 bg-blue-50 px-3 py-1 rounded-full">
                 จำนวนนักเรียน: {attendanceRecords.length} คน
               </div>
             </div>
 
-            <div className="space-y-4">
+            {/* iPad-optimized attendance list */}
+            <div className="space-y-3 md:space-y-4">
               {(attendanceRecords || []).map((record) => (
-                <div key={record.student.id} className="bg-gray-50 rounded-xl p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center space-x-3">
-                      <div className="h-10 w-10 bg-gradient-to-r from-blue-400 to-blue-500 rounded-full flex items-center justify-center">
-                        <span className="text-white font-bold">
+                <div key={record.student.id} className="bg-gray-50/70 rounded-xl p-3 md:p-4 hover:bg-white/80 transition-all duration-200">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center space-x-3 min-w-0 flex-1">
+                      <div className="h-12 w-12 bg-gradient-to-r from-blue-400 to-blue-500 rounded-full flex items-center justify-center shadow-md">
+                        <span className="text-white font-bold text-lg">
                           {record.student.firstname.charAt(0)}
                         </span>
                       </div>
-                      <div>
-                        <h3 className="font-semibold text-gray-800">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-semibold text-gray-800 text-base md:text-lg leading-relaxed truncate">
                           {record.student.firstname} {record.student.lastname}
                         </h3>
-                        <p className="text-sm text-gray-600">รหัส: {record.student.student_id}</p>
+                        <p className="text-sm text-gray-600 leading-relaxed">รหัส: {record.student.student_id}</p>
                       </div>
                     </div>
-                    <div className={`px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(record.status)}`}>
+                    <div className={`px-3 py-2 rounded-full text-sm font-medium border shrink-0 ${getStatusColor(record.status)}`}>
                       {getStatusText(record.status)}
                     </div>
                   </div>
                   
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
-                    {['present', 'absent', 'late', 'excused'].map((status) => (
+                  {/* Status buttons - improved layout for iPad */}
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+                    {['pending', 'present', 'absent', 'late', 'excused'].map((status) => (
                       <button
                         key={status}
                         onClick={() => handleStatusChange(record.student.id, status as any)}
-                        className={`py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200 ${
+                        className={`py-3 px-4 rounded-xl text-sm font-medium transition-all duration-200 transform hover:scale-105 shadow-sm ${
                           record.status === status
-                            ? getStatusColor(status) + ' ring-2 ring-offset-2 ring-blue-400'
-                            : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                            ? getStatusColor(status) + ' ring-2 ring-offset-2 ring-blue-400 shadow-md'
+                            : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50 hover:shadow-md'
                         }`}
                       >
                         {getStatusText(status)}
@@ -341,13 +353,15 @@ export default function AttendancePage() {
                     ))}
                   </div>
                   
+                  {/* Notes input */}
                   <div>
-                    <input
-                      type="text"
-                      placeholder="หมายเหตุ (ถ้ามี)"
+                    <label className="block text-sm font-medium text-gray-700 mb-2">หมายเหตุ</label>
+                    <textarea
+                      placeholder="เพิ่มหมายเหตุ (ถ้ามี)..."
                       value={record.notes}
                       onChange={(e) => handleNotesChange(record.student.id, e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent text-sm"
+                      rows={2}
+                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-3 focus:ring-blue-100 focus:border-blue-400 transition-all duration-200 text-sm leading-relaxed resize-none"
                     />
                   </div>
                 </div>
@@ -355,17 +369,38 @@ export default function AttendancePage() {
             </div>
 
             {/* Summary */}
-            <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
-              {['present', 'absent', 'late', 'excused'].map((status) => {
+            <div className="mt-6 grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4">
+              {['pending', 'present', 'absent', 'late', 'excused'].map((status) => {
                 const count = (attendanceRecords || []).filter(r => r.status === status).length;
                 return (
-                  <div key={status} className={`rounded-xl p-4 text-center ${getStatusColor(status)}`}>
-                    <div className="text-2xl font-bold">{count}</div>
-                    <div className="text-sm">{getStatusText(status)}</div>
+                  <div key={status} className={`rounded-xl p-4 text-center shadow-sm ${getStatusColor(status)}`}>
+                    <div className="text-2xl font-bold mb-1">{count}</div>
+                    <div className="text-sm font-medium leading-relaxed">{getStatusText(status)}</div>
                   </div>
                 );
               })}
             </div>
+
+            {/* Save button reminder */}
+            {attendanceRecords.some(r => r.status !== 'pending') && (
+              <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-xl">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <svg className="h-5 w-5 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="text-green-800 text-sm font-medium">มีการเปลี่ยนแปลงการเช็คชื่อ</span>
+                  </div>
+                  <button
+                    onClick={handleSaveAttendance}
+                    disabled={isSaving}
+                    className="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {isSaving ? 'กำลังบันทึก...' : 'บันทึกเลย'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

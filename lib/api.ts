@@ -1,34 +1,13 @@
-import axios from 'axios';
-import Cookies from 'js-cookie';
+// DEPRECATED: This HTTP client is no longer used.
+// All services now use mock data from lib/mockData.ts
+// This file is kept for reference only and should not be imported.
 
-const API_BASE_URL = 'http://localhost:8080/api/v1';
+console.warn('api.ts: HTTP client is deprecated. All services now use mock data.');
 
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// Add token to requests if available
-api.interceptors.request.use((config) => {
-  const token = Cookies.get('auth_token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-
-// Handle token expiration
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      Cookies.remove('auth_token');
-      window.location.href = '/login';
-    }
-    return Promise.reject(error);
-  }
-);
-
-export default api;
+// Dummy export to prevent build errors if something still imports this
+export default {
+  get: () => Promise.reject(new Error('HTTP client disabled - using mock data')),
+  post: () => Promise.reject(new Error('HTTP client disabled - using mock data')),
+  put: () => Promise.reject(new Error('HTTP client disabled - using mock data')),
+  delete: () => Promise.reject(new Error('HTTP client disabled - using mock data')),
+};
